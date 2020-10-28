@@ -1,0 +1,6 @@
+from typing import List, Tuple
+import mopidy_client.models 
+
+class HistoryController:
+    def get_length(self) -> int: ...
+    def get_history(self) -> List[Tuple[int, models.Ref]]: ...
