@@ -1,7 +1,7 @@
 import setuptools
 
 setuptools.setup(
-    name="mopidy-client"
+    name="mopidy-client",
     version="0.0.1",
     author="Andrew Bates",
     author_email="abates@omeganetserv.com",
