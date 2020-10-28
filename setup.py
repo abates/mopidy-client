@@ -3,6 +3,7 @@ import setuptools
 setuptools.setup(
     name="mopidy-client",
     version="0.0.1",
+    license='Apache License, Version 2.0',
     author="Andrew Bates",
     author_email="abates@omeganetserv.com",
     description="A Websocket based JSON-RPC client for Mopidy",

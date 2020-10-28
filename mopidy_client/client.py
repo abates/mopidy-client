@@ -9,9 +9,6 @@ from tornado.httpclient import HTTPRequest
 
 _LOGGER = logging.getLogger(__name__)
 
-class NotConnectedError(Exception):
-    pass
-
 class Client:
     _msg_id = 0
 
