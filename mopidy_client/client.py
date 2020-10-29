@@ -39,15 +39,8 @@ class Client:
     @classmethod
     async def test_connection(cls, ws_url):
         client = Client(ws_url)
-        try:
-            client.connect()
-            version = await client.version()
-            if version:
-                return True
-        except:
-            pass
-
-        return False
+        client.connect()
+        return await client.version()
 
     def __init__(self, ws_url):
         self._ws_url = ws_url
