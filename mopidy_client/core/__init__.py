@@ -4,8 +4,12 @@ class BaseController:
         self._client = client
 
     def call(self, method, **kwargs):
-        method = f"core.{self._name}.{method}"
-        return self._client.call(method, **kwargs) 
+        if self._name != "":
+            method = f"core.{self._name}.{method}"
+        else:
+            method = f"core.{method}"
+
+        return self._client.call(method, **kwargs)
 
     def __getattr__(self, method_name, **kwargs):
         def meth(self, **kwargs):
@@ -13,25 +17,36 @@ class BaseController:
 
         return meth.__get__(self)
 
+
+class CoreController(BaseController):
+    def __init__(self, client):
+        super().__init__("")
+
+
 class HistoryController(BaseController):
     def __init__(self, client):
         super().__init__("history", client)
+
 
 class LibraryController(BaseController):
     def __init__(self, client):
         super().__init__("library", client)
 
+
 class MixerController(BaseController):
     def __init__(self, client):
         super().__init__("mixer", client)
+
 
 class PlaybackController(BaseController):
     def __init__(self, client):
         super().__init__("playback", client)
 
+
 class PlaylistsController(BaseController):
     def __init__(self, client):
         super().__init__("playlists", client)
+
 
 class TracklistController(BaseController):
     def __init__(self, client):
