@@ -28,6 +28,14 @@ class NotConnectedError(Exception):
     pass
 
 
+class JsonRpcException(Exception):
+    def __init__(self, error):
+        super().__init__(error["message"])
+        self.code = error["code"]
+        self.message = error["message"]
+        self.data = error["data"]
+
+
 class Client:
     _msg_id = 0
 
@@ -37,9 +45,9 @@ class Client:
         return cls._msg_id
 
     @classmethod
-    async def test_connection(cls, ws_url):
+    async def test_connection(cls, ws_url, **kwargs):
         client = Client(ws_url)
-        client.connect()
+        await client.connect(**kwargs)
         return await client.version()
 
     def __init__(self, ws_url):
@@ -123,6 +131,8 @@ class Client:
         return self.on_event("volume_changed", handler)
 
     async def connect(self, **kwargs):
+        kwargs["follow_redirects"] = False
+
         request = HTTPRequest(self._ws_url, **kwargs)
         self._ws = await websocket.websocket_connect(
             request, on_message_callback=self.on_message
@@ -130,7 +140,7 @@ class Client:
         self._connected = True
 
     async def version(self):
-        return self.core.version()
+        return await self.core.get_version()
 
     async def dispatch(self, event, data):
         if event in self._listeners:
@@ -150,11 +160,20 @@ class Client:
         if "jsonrpc" in message:
             if "id" in message:
                 if message["id"] in self._req:
-                    _LOGGER.debug(
-                        "JSON-RPC Response(%d) %s", message["id"], message["result"]
-                    )
                     fut = self._req.pop(message["id"])
-                    fut.set_result(message["result"])
+                    if "error" in message:
+                        fut.set_exception(JsonRpcException(message["error"]))
+                        pass
+                    elif "result" in message:
+                        _LOGGER.debug(
+                            "JSON-RPC Response(%d) %s",
+                            message["id"],
+                            message["result"],
+                        )
+                        fut.set_result(message["result"])
+                    else:
+                        _LOGGER.warn("Unknown message %s", message)
+                        fut.set_result(None)
                 else:
                     _LOGGER.debug(
                         "Nobody cares about JSON-RPC Response %d", message["id"]

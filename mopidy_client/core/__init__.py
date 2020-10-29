@@ -20,7 +20,7 @@ class BaseController:
 
 class CoreController(BaseController):
     def __init__(self, client):
-        super().__init__("")
+        super().__init__("", client)
 
 
 class HistoryController(BaseController):
