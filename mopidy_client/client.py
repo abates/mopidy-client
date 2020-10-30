@@ -139,6 +139,9 @@ class Client:
         )
         self._connected = True
 
+    async def disconnect(self):
+        self._ws.close()
+
     async def version(self):
         return await self.core.get_version()
 
