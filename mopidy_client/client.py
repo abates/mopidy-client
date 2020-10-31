@@ -30,7 +30,7 @@ class NotConnectedError(Exception):
 
 class JsonRpcException(Exception):
     def __init__(self, error):
-        super().__init__(error["message"])
+        super().__init__(error["data"]["traceback"])
         self.code = error["code"]
         self.message = error["message"]
         self.data = error["data"]
@@ -50,9 +50,11 @@ class Client:
         await client.connect(**kwargs)
         return await client.version()
 
-    def __init__(self, ws_url):
+    def __init__(self, ws_url, auto_reconnect=True):
         self._ws_url = ws_url
         self._connected = False
+        self._connect_args = {}
+        self._auto_reconnect = auto_reconnect
         self._listeners = {}
 
         self._req = {}
@@ -130,16 +132,21 @@ class Client:
     def on_volume_changed(self, handler: VolumeChanged) -> Callable[[], None]:
         return self.on_event("volume_changed", handler)
 
-    async def connect(self, **kwargs):
-        kwargs["follow_redirects"] = False
-
-        request = HTTPRequest(self._ws_url, **kwargs)
+    async def _connect(self):
+        request = HTTPRequest(self._ws_url, **self._connect_args)
         self._ws = await websocket.websocket_connect(
             request, on_message_callback=self.on_message
         )
+        _LOGGER.info("Connected to %s", self._ws_url)
         self._connected = True
 
+    async def connect(self, **kwargs):
+        kwargs["follow_redirects"] = False
+        self._connect_args = kwargs
+        await self._connect()
+
     async def disconnect(self):
+        self._connected = False
         self._ws.close()
 
     async def version(self):
@@ -154,7 +161,11 @@ class Client:
 
     def on_message(self, data):
         if not data:
+            _LOGGER.info("Disconnected from %s", self._ws_url)
             self._connected = False
+            if self._auto_reconnect:
+                _LOGGER.info("Reconnecting")
+                asyncio.create_task(self._connect())
             return
 
         escape.native_str(data)
@@ -166,7 +177,6 @@ class Client:
                     fut = self._req.pop(message["id"])
                     if "error" in message:
                         fut.set_exception(JsonRpcException(message["error"]))
-                        pass
                     elif "result" in message:
                         _LOGGER.debug(
                             "JSON-RPC Response(%d) %s",
