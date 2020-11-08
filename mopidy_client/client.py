@@ -6,7 +6,7 @@ from functools import partial
 
 from mopidy_client import models, core
 from tornado import websocket, escape, gen
-from tornado.httpclient import HTTPRequest
+from tornado.httpclient import HTTPClientError, HTTPRequest
 
 from .callbacks import (
     MuteChanged,
@@ -50,12 +50,13 @@ class Client:
         await client.connect(**kwargs)
         return await client.version()
 
-    def __init__(self, ws_url, auto_reconnect=True):
+    def __init__(self, ws_url, auto_reconnect=True, retries=3):
         self._ws_url = ws_url
         self._connected = False
         self._connect_args = {}
         self._auto_reconnect = auto_reconnect
         self._listeners = {}
+        self._retries = retries
 
         self._req = {}
         self.core = core.CoreController(self)
@@ -133,12 +134,25 @@ class Client:
         return self.on_event("volume_changed", handler)
 
     async def _connect(self):
-        request = HTTPRequest(self._ws_url, **self._connect_args)
-        self._ws = await websocket.websocket_connect(
-            request, on_message_callback=self.on_message
-        )
-        _LOGGER.info("Connected to %s", self._ws_url)
-        self._connected = True
+        for i in range(self._retries):
+            try:
+                request = HTTPRequest(self._ws_url, **self._connect_args)
+                self._ws = await websocket.websocket_connect(
+                    request, on_message_callback=self.on_message
+                )
+                _LOGGER.info("Connected to %s", self._ws_url)
+                self._connected = True
+                break
+            except HTTPClientError as ex:
+                _LOGGER.warn(
+                    "Failed connecting to %s received HTTP %s", self._ws_url, ex.code
+                )
+                pass
+
+        if not self._connected:
+            raise NotConnectedError(
+                f"Failed to connect to {self._ws_url} retry timeout"
+            )
 
     async def connect(self, **kwargs):
         kwargs["follow_redirects"] = False
@@ -201,7 +215,11 @@ class Client:
 
     async def call(self, method, **kwargs):
         if not self._connected:
-            raise NotConnectedError("Not connected")
+            if self._auto_reconnect:
+                _LOGGER.info("Reconnecting")
+                asyncio.create_task(self._connect())
+            else:
+                raise NotConnectedError("Not connected")
 
         data = {
             "jsonrpc": "2.0",
